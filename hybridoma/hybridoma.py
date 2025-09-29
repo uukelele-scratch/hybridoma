@@ -1,7 +1,5 @@
 import asyncio
 import quart as q
-import pydantic as p
-import jinja2 as j
 from functools import wraps, lru_cache
 from markupsafe import Markup
 import os, re
@@ -10,11 +8,14 @@ import minify_html
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine
 from sqlalchemy.orm import declarative_base
 import sqlalchemy as sa
+from contextlib import asynccontextmanager
 
 HYBRIDOMA_JS = open(os.path.join(os.path.dirname(__file__), 'hybridoma.js.txt')).read()
 HYBRIDOMA_CSS = open(os.path.join(os.path.dirname(__file__), 'pico.classless.min.css')).read()
 MORPHDOM_JS = open(os.path.join(os.path.dirname(__file__), 'morphdom.min.js')).read()
 LUCIDE_JS = open(os.path.join(os.path.dirname(__file__), 'lucide.min.js')).read()
+
+Model = declarative_base()
 
 class HyHelpers:
     def __init__(self, app: "App"):
@@ -41,23 +42,30 @@ class HyDB:
         self._engine: AsyncEngine = None
         self._sessionmaker = None
 
-    def init_app(self, db_path):
+    def init_app(self, app):
+        db_path = app.config['SQLALCHEMY_DATABASE_URI']
         self._engine = create_async_engine(db_path)
         self._sessionmaker = async_sessionmaker(self._engine, expire_on_commit=False)
 
     async def create_all(self):
-        async with self._engine().begin() as conn:
+        async with self._engine.begin() as conn:
             await conn.run_sync(Model.metadata.create_all)
+
+    @asynccontextmanager
+    async def _session(self):
+        if not self._sessionmaker:
+            raise RuntimeError("Database not initialized.")
+        
+        async with self._sessionmaker() as session:
+            async with session.begin():
+                yield session
 
     def transaction(self, func):
         @wraps(func)
-        async def wrapper(*args, **kwargs):            
-            async with self.bind.Session() as s:
-                async with s.begin():
-                    return await func(args[0], s, *args[1:], **kwargs)
+        async def wrapper(*args, **kwargs):
+            async with self._session() as s:
+                return await func(args[0], s, *args[1:], **kwargs)
         return wrapper
-
-db = HyDB()
 
 class App(q.Quart):
     def __init__(self, import_name, db_path=None, **kwargs):
@@ -65,6 +73,7 @@ class App(q.Quart):
         self._view_models = {}
         self._models = []
 
+        self.db = HyDB(self)
         if db_path:
             self._init_db(db_path)
 
@@ -90,8 +99,7 @@ class App(q.Quart):
 
     def _init_db(self, db_path):
         self.config['SQLALCHEMY_DATABASE_URI'] = db_path
-        db.init_app(self)
-        self._db_path = db_path
+        self.db.init_app(self)
 
     def model(self, cls):
         self._models.append(cls)
@@ -235,9 +243,6 @@ class App(q.Quart):
 
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
-
-class Model(p.BaseModel):
-    pass
 
 class ViewModel():
     def get_state(self):
