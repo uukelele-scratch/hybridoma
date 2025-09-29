@@ -1,0 +1,120 @@
+if(!$DEBUG)console.log=()=>{}
+
+console.log("[+] hy-client injected.")
+
+function scanAndInitialize(rootElement) {
+    const elementsToInit = rootElement.querySelectorAll('[hy-init]');
+    elementsToInit.forEach(el => {
+        // We use a Function constructor. It's safer than eval() and lets us pass 'this'.
+        // 'this' will refer to the element 'el' inside the hy-init expression.
+        const expression = el.getAttribute('hy-init');
+        try {
+            new Function(expression).call(el);
+        } catch (e) {
+            console.error(`Error executing hy-init expression on element:`, el, e);
+            console.error(`Expression was: ${expression}`);
+        }
+    });
+}
+
+function parseAction(actionStr) {
+    const match = actionStr.match(/(\w+)\((.*)\)/);
+    if (match) {
+        const name = match[1];
+        const argsStr = match[2];
+
+        try {
+            const args = JSON.parse(`[${argsStr}]`);
+            return { name, args };
+        } catch (e) {
+            console.error("Could not parse action args:", argsStr, e);
+            return null;
+        }
+    }
+    return { name: actionStr, args: [] };
+}
+
+const components = document.querySelectorAll('[hy-vm]');
+if (components.length > 0) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/_hy/ws`);
+
+    ws.onopen = () => {
+        console.log("[+] Connected.");
+        const componentsToInit = Array.from(components).map(el => ({
+            hy_id: el.id,
+            vm_name: el.getAttribute('hy-vm'),
+        }));
+        ws.send(JSON.stringify({ type: 'init', components: componentsToInit }));
+    }
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log(`[ws] Received:`, data)
+        if (data.type === 'update' && data.id) {
+            const targetEl = document.getElementById(data.id);
+            if (targetEl) {
+                morphdom(targetEl, data.html);
+                window.lucide?.createIcons();
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        window.lucide?.createIcons();
+        scanAndInitialize(document.body);
+    })
+
+    const observer = new MutationObserver((mutationsList) => {
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1) { 
+                        scanAndInitialize(node);
+                    }
+                });
+            }
+        }
+    });
+
+    components.forEach(component => {
+        observer.observe(component, { childList: true, subtree: true });
+    })
+
+    document.addEventListener('click', (e) => {
+        const target = e.target.closest('[hy-click]');
+        const componentRoot = target?.closest('[hy-vm]');
+        if (target && componentRoot) {
+            const actionStr = target.getAttribute('hy-click');
+            const action = parseAction(actionStr);
+            if (action) {
+                const payload = {
+                    type: 'action',
+                    hy_id: componentRoot.id,
+                    ...action
+                };
+                ws.send(JSON.stringify(payload));
+                console.log(`[ws] Sent:`, payload)
+            }
+        }
+    })
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target.closest('form[hy-submit]');
+        const componentRoot = form?.closest('[hy-vm]');
+        if (form && componentRoot) {
+            e.preventDefault();
+            const actionStr = form.getAttribute('hy-submit');
+            const formData = new FormData(form);
+            const formPayload = Object.fromEntries(formData.entries());
+            const payload = {
+                type: 'action',
+                hy_id: componentRoot.id,
+                name: actionStr,
+                args: [formPayload]
+            };
+            ws.send(JSON.stringify(payload));
+            console.log(`[ws] Sent:`, payload)
+        }
+    })
+}

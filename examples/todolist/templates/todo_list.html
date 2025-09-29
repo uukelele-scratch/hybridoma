@@ -1,0 +1,26 @@
+<!-- This is a self-contained component -->
+<div class="todo-app">
+    <h1>WS Todos</h1>
+
+    <!-- Form to add a new todo -->
+    <!-- hy-submit calls the 'add_todo' method on the ViewModel -->
+    <form hy-submit="add_todo">
+        <fieldset role="group">
+            <!-- hy-model provides two-way binding to the 'new_todo_text' state -->
+            <input type="text" name="new_todo_text" hy-model="new_todo_text" placeholder="What needs to be done?">
+            <button type="submit">Add</button>
+        </fieldset>
+    </form>
+
+    <!-- The list of todos -->
+    <ul>
+        {% for todo in todos %}
+            <li class="{{ 'done' if todo.done else '' }}">
+                <span hy-click="toggle_todo({{ todo.id }})">{{ todo.text }}</span>
+                <button class="delete" hy-click="delete_todo({{ todo.id }})">
+                    {{ hy.icon("trash-2", 16) }}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+</div>

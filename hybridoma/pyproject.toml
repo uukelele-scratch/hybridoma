@@ -1,0 +1,8 @@
+[project]
+name = "hybridoma"
+version = "1.0.0"
+dependencies = ["quart", "pydantic", "sqlalchemy[asyncio]>=2.0", "aiosqlite", "asyncpg", "minify-html"]
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
