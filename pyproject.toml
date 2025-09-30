@@ -12,7 +12,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
-    "Framework :: Quart",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = ["Quart>=0.20.0", "pydantic", "flask-sqlalchemy", "minify-html", "quart-flask-patch", "markupsafe"]
