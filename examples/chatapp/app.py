@@ -1,9 +1,9 @@
-from hybridoma import App, ViewModel
+from hybridoma import App, ViewModel, Model
 
 app = App(__name__)
 
 @app.model
-class Message:
+class Message(Model):
     content: str
 
 @app.view_model(template="chat_window.html")
@@ -15,11 +15,7 @@ class ChatWindow(ViewModel):
 
     async def add_message(self, payload: dict):
         message_text = payload["text"]
-        message = Message()
-        message.content = message_text
-        self.messages.append(message)
-        print(f"New Message: {message_text}")
-        print(self.messages)
+        self.messages.append(Message(content=message_text))
 
 @app.route("/")
 async def index():
