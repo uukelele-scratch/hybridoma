@@ -1,0 +1,16 @@
+<h2>
+    Chat Window
+</h2>
+{% for message in messages %}
+    <p>
+        {{ message.content }}
+    </p>
+{% endfor %}
+
+<form hy-submit="add_message"><fieldset role="group">
+    <input type="text" name="text" placeholder="Send a message!">
+    <button type="submit">
+        {{ hy.icon("send") }}
+        Send!
+    </button>
+</fieldset></form>

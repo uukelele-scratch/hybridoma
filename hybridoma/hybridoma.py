@@ -212,7 +212,7 @@ class App(q.Quart):
                         print(f"[ws] Received action for unknown component ID: {hy_id}")
                         continue
 
-                    action_name = data.get('name')
+                    action_name: str = data.get('name')
                     args = data.get('args', [])
 
                     action_method = getattr(vm_instance, action_name, None)
@@ -225,6 +225,10 @@ class App(q.Quart):
                             _hy_id = hy_id,
                         )
                         await ws.send_json({ 'type': 'update', 'html': str(html), 'id': hy_id })
+                    else:
+                        msg = f"[ws] [!] Could not find action {action_name} on {vm_class} ({action_method})."
+                        if action_name.endswith("()"): msg += f" Perhaps you meant: {action_name.removesuffix('()')}"
+                        print(msg)
             except asyncio.CancelledError:
                 print("[ws] client disconnected.")
 
