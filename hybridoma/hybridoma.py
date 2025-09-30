@@ -237,6 +237,35 @@ class App(q.Quart):
 
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
+    
+    def run(self, *args, **kwargs):
+        loop = asyncio.get_event_loop()
+        shutdown_event = asyncio.Event()
+
+        def _signal_handler(*_, **__):
+            shutdown_event.set()
+
+            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            for task in tasks:
+                task.cancel()
+        
+        import signal
+        loop.add_signal_handler(signal.SIGINT, _signal_handler)
+        loop.add_signal_handler(signal.SIGTERM, _signal_handler)
+
+        kwargs['shutdown_trigger'] = shutdown_event.wait
+        server_task = asyncio.ensure_future(
+            self.run_task(*args, **kwargs)
+        )
+
+        try:
+            loop.run_until_complete(server_task)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            loop.remove_signal_handler(signal.SIGINT)
+            loop.remove_signal_handler(signal.SIGTERM)
+
 
 class Model(p.BaseModel): ...
 
