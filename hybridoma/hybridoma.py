@@ -1,3 +1,4 @@
+import quart_flask_patch
 import asyncio
 import quart as q
 from functools import wraps, lru_cache
@@ -5,8 +6,8 @@ from markupsafe import Markup
 import os, re
 import json, inspect
 import minify_html
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine
-from sqlalchemy.orm import declarative_base
+import pydantic as p    
+from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 from contextlib import asynccontextmanager
 
@@ -14,8 +15,6 @@ HYBRIDOMA_JS = open(os.path.join(os.path.dirname(__file__), 'hybridoma.js.txt'))
 HYBRIDOMA_CSS = open(os.path.join(os.path.dirname(__file__), 'pico.classless.min.css')).read()
 MORPHDOM_JS = open(os.path.join(os.path.dirname(__file__), 'morphdom.min.js')).read()
 LUCIDE_JS = open(os.path.join(os.path.dirname(__file__), 'lucide.min.js')).read()
-
-Model = declarative_base()
 
 class HyHelpers:
     def __init__(self, app: "App"):
@@ -36,36 +35,26 @@ class HyHelpers:
         if height and not width: width = height
         return Markup(f'<i data-lucide="{icon_name}" style="width:{width}px; height:{height}px;"></i>')
 
-class HyDB:
-    def __init__(self, app):
-        self._app = app
-        self._engine: AsyncEngine = None
-        self._sessionmaker = None
-
-    def init_app(self, app):
-        db_path = app.config['SQLALCHEMY_DATABASE_URI']
-        self._engine = create_async_engine(db_path)
-        self._sessionmaker = async_sessionmaker(self._engine, expire_on_commit=False)
-
-    async def create_all(self):
-        async with self._engine.begin() as conn:
-            await conn.run_sync(Model.metadata.create_all)
-
-    @asynccontextmanager
-    async def _session(self):
-        if not self._sessionmaker:
-            raise RuntimeError("Database not initialized.")
-        
-        async with self._sessionmaker() as session:
-            async with session.begin():
-                yield session
+class HyDB(SQLAlchemy):
+    def __init__(self, *args, **kwargs):
+        kwargs['session_options'] = {
+            'scopefunc': lambda: asyncio.current_task() if asyncio.get_running_loop() else None
+        }
+        super().__init__(*args, **kwargs)
 
     def transaction(self, func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            async with self._session() as s:
-                return await func(args[0], s, *args[1:], **kwargs)
+            try:
+                result = await self._app.ensure_async(func)(*args, **kwargs)
+                await self._app.ensure_async(self.session.commit)()
+                return result
+            except Exception as e:
+                await self._app.ensure_async(self.session.rollback)()
+                raise e
         return wrapper
+
+db = HyDB()
 
 class App(q.Quart):
     def __init__(self, import_name, db_path=None, **kwargs):
@@ -73,7 +62,6 @@ class App(q.Quart):
         self._view_models = {}
         self._models = []
 
-        self.db = HyDB(self)
         if db_path:
             self._init_db(db_path)
 
@@ -99,7 +87,13 @@ class App(q.Quart):
 
     def _init_db(self, db_path):
         self.config['SQLALCHEMY_DATABASE_URI'] = db_path
-        self.db.init_app(self)
+        db.init_app(self)
+        db._app = self
+
+        # async with self.app_context():
+            # og_query = db.Model.query
+            # db.Model.query = property(lambda m_inst: AsyncObjectProxy(self, og_query))
+            # db.session = AsyncObjectProxy(self, db.session)
 
     def model(self, cls):
         self._models.append(cls)
@@ -244,9 +238,8 @@ class App(q.Quart):
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
 
-class ViewModel():
-    def get_state(self):
-        return {k: v for k, v in self.__dict__.items() if not k.startswith('_') and not callable(v)}
+class Model(p.BaseModel): ...
 
-    def mount(self):
-        pass
+class ViewModel():
+    def get_state(self): return {k: v for k, v in self.__dict__.items() if not k.startswith('_') and not callable(v)}
+    def mount(self): ...
