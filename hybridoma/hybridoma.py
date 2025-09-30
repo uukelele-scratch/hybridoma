@@ -11,10 +11,14 @@ from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 from contextlib import asynccontextmanager
 
-HYBRIDOMA_JS = open(os.path.join(os.path.dirname(__file__), 'hybridoma.js.txt')).read()
-HYBRIDOMA_CSS = open(os.path.join(os.path.dirname(__file__), 'pico.classless.min.css')).read()
-MORPHDOM_JS = open(os.path.join(os.path.dirname(__file__), 'morphdom.min.js')).read()
-LUCIDE_JS = open(os.path.join(os.path.dirname(__file__), 'lucide.min.js')).read()
+def static_file(name):
+    with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
+        return file.read()
+
+HYBRIDOMA_JS  = static_file('hybridoma.js.txt')
+HYBRIDOMA_CSS = static_file('pico.classless.min.css')
+MORPHDOM_JS   = static_file('morphdom.min.js.txt')
+LUCIDE_JS     = static_file('lucide.min.js.txt')
 
 class HyHelpers:
     def __init__(self, app: "App"):

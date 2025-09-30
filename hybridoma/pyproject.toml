@@ -1,8 +1,0 @@
-[project]
-name = "hybridoma"
-version = "1.0.0"
-dependencies = ["Quart>=0.20.0", "pydantic", "flask-sqlalchemy", "minify-html", "quart-flask-patch"]
-
-[build-system]
-requires = ["setuptools >= 61.0"]
-build-backend = "setuptools.build_meta"

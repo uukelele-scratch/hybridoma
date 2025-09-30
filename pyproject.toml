@@ -1,0 +1,25 @@
+[project]
+name = "hybridoma"
+version = "0.1.0"
+authors = [
+  { name="uukelele", email="robustrobot11@gmail.com", github="uukelele-scratch" },
+]
+description = "A Flask-like web framework that merges the frontend and backend into one."
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Framework :: Quart",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dependencies = ["Quart>=0.20.0", "pydantic", "flask-sqlalchemy", "minify-html", "quart-flask-patch", "markupsafe"]
+
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+hybridoma = ["static/*.css", "static/*.js", "static/*.txt"]
