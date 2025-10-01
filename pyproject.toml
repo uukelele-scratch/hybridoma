@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
   { name="uukelele", email="robustrobot11@gmail.com" },
 ]
-description = "A Flask-like web framework that merges the frontend and backend into one."
+description = "Write Python, get a reactive frontend - no JS framework required"
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.10"
