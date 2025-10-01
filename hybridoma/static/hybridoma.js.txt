@@ -5,8 +5,6 @@ console.log("[+] hy-client injected.")
 function scanAndInitialize(rootElement) {
     const elementsToInit = rootElement.querySelectorAll('[hy-init]');
     elementsToInit.forEach(el => {
-        // We use a Function constructor. It's safer than eval() and lets us pass 'this'.
-        // 'this' will refer to the element 'el' inside the hy-init expression.
         const expression = el.getAttribute('hy-init');
         try {
             new Function(expression).call(el);
