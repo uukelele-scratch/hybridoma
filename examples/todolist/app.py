@@ -33,15 +33,14 @@ class TodoList(ViewModel):
     @db.transaction
     async def add_todo(self, payload: dict):
         """Adds a new todo to the database and updates the UI."""
-        new_todo_text = payload.get('new_todo_text', '').strip()
-        if not new_todo_text:
+        text = payload.get('new_todo_text', '').strip()
+        if not text:
             return # No empty todos allowed
 
-        todo = Todo(text=new_todo_text)
+        todo = Todo(text=text)
         db.session.add(todo)
 
-        self.todos.append(todo) # Update our local state
-        new_todo_text = "" # Clear the input box
+        self.todos.append(todo)
 
     @db.transaction
     async def toggle_todo(self, todo_id: int):
