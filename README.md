@@ -1,6 +1,7 @@
-# hybridoma
+<h1 align="center">Hybridoma</h1>
+<h3 align="center">Write Python, get a reactive frontend - no JS framework required</h3>
 
-Hybridoma: Write Python, get a reactive frontend - no JS framework required
+---
 
 - **[Documentation](https://github.com/uukelele-scratch/hybridoma/wiki)**
 - **[Issues](https://github.com/uukelele-scratch/hybridoma/issues)**
