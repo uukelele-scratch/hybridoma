@@ -11,18 +11,6 @@ from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 from contextlib import asynccontextmanager
 
-from quart import (
-    request,
-    jsonify,
-    session,
-    g,
-    abort,
-    redirect,
-    url_for,
-    flash,
-)
-
-
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
         return file.read()

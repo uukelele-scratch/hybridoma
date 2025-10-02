@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src=".github/assets/hybridoma.png" height="300">
+  <img src="https://raw.githubusercontent.com/uukelele-scratch/hybridoma/refs/heads/main/.github/assets/hybridoma.png" height="300">
   <br>
   Hybridoma
 </h1>
