@@ -59,7 +59,6 @@ if (components.length > 0) {
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        window.lucide?.createIcons();
         scanAndInitialize(document.body);
     })
 
@@ -116,3 +115,7 @@ if (components.length > 0) {
         }
     })
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.lucide?.createIcons();
+})
