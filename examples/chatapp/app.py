@@ -1,12 +1,12 @@
-from hybridoma import App, ViewModel, Model
+from hybridoma import App, ViewModel, view_model
+from pydantic import BaseModel
 
 app = App(__name__)
 
-@app.model
-class Message(Model):
+class Message(BaseModel):
     content: str
 
-@app.view_model(template="chat_window.html")
+@view_model(template="chat_window.html")
 class ChatWindow(ViewModel):
     messages: list[Message] = []
 

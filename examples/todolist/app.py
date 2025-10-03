@@ -6,11 +6,10 @@ except (ImportError, ModuleNotFoundError):
     hybridoma_path = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, "hybridoma")
     sp.run([sys.executable, "-m", "pip", "install", "-e", hybridoma_path, "--trusted-host", "pypi.org", "--trusted-host", "files.pythonhosted.org", "--break-system-packages"])
 
-from hybridoma import App, ViewModel, Model, db
+from hybridoma import App, ViewModel, db, view_model
 
 app = App(__name__, db_path='sqlite:///todos.db')
 
-@app.model
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.String(120), nullable=False)
@@ -21,7 +20,7 @@ async def setup_database():
     async with app.app_context():
         app.ensure_async(db.create_all)
 
-@app.view_model(template="todo_list.html")
+@view_model(template="todo_list.html")
 class TodoList(ViewModel):
     todos: list[Todo] = []
 
