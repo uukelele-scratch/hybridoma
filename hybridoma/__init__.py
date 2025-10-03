@@ -4,7 +4,7 @@ from .hybridoma import (
     ViewModel, Model,
     HyDB,
 )
-
+from quart import render_template
 from quart import (
     request,
     jsonify,
@@ -17,3 +17,5 @@ from quart import (
 )
 
 from . import quart
+
+quart.render_template = render_template = App.render

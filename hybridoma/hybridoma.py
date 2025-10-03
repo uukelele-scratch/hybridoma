@@ -26,10 +26,7 @@ class HyHelpers:
 
     async def component(self, *args, **kwargs):
         return await self.app._render_component_for_template(*args, **kwargs)
-    
-    def js(self):
-        return self.app._render_js()
-    
+       
     def css(self):
         return self.app._render_css()
     
@@ -112,9 +109,14 @@ class App(q.Quart):
             return wrapper
         return decorator
 
-    async def render(self, template, **ctx):
-        html = await q.render_template(template, **ctx)
-        script = str(self._hy.js())
+    @staticmethod
+    async def render(template, **ctx):
+        html = await _render_template(template, **ctx)
+        script = str(
+            '<script src="/_hy/lucide.js"></script>'
+            '<script src="/_hy/morphdom.js"></script>'
+            '<script src="/_hy/hy.js" type="module" defer></script>'
+        )
         
         html, subs_made = re.subn(
             r'(?i)</\s*body\s*>',
@@ -126,6 +128,7 @@ class App(q.Quart):
         if subs_made == 0:
             html += script
 
+        self = q.current_app._get_current_object()
         if not self.debug:
             html = minify_html.minify(html, minify_css=True, minify_js=True)
 
@@ -236,13 +239,6 @@ class App(q.Quart):
             except asyncio.CancelledError:
                 print("[ws] client disconnected.")
 
-    def _render_js(self):
-        return Markup(
-            '<script src="/_hy/lucide.js"></script>'
-            '<script src="/_hy/morphdom.js"></script>'
-            '<script src="/_hy/hy.js" type="module" defer></script>'
-        )
-
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
     
@@ -280,3 +276,6 @@ class Model(p.BaseModel): ...
 class ViewModel():
     def get_state(self): return {k: v for k, v in self.__dict__.items() if not k.startswith('_') and not callable(v)}
     def mount(self): ...
+
+_render_template = q.render_template
+q.render_template = App.render
