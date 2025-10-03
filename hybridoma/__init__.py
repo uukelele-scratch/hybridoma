@@ -15,3 +15,5 @@ from quart import (
     url_for,
     flash,
 )
+
+from . import quart
