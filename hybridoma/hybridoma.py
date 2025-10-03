@@ -6,10 +6,10 @@ from markupsafe import Markup
 import os, re
 import json, inspect
 import minify_html
-import pydantic as p    
 from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 from contextlib import asynccontextmanager
+from warnings import deprecated
 
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
@@ -19,6 +19,19 @@ HYBRIDOMA_JS  = static_file('hybridoma.js.txt')
 HYBRIDOMA_CSS = static_file('pico.classless.min.css')
 MORPHDOM_JS   = static_file('morphdom.min.js.txt')
 LUCIDE_JS     = static_file('lucide.min.js.txt')
+
+_VIEW_MODELS = {}
+
+def view_model(template):
+    def decorator(cls):
+        _VIEW_MODELS[cls.__name__] = {"class": cls, "template": template}
+        @wraps(cls)
+        def wrapper(*args, **kwargs):
+            return cls(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 
 class HyHelpers:
     def __init__(self, app: "App"):
@@ -60,8 +73,6 @@ db = HyDB()
 class App(q.Quart):
     def __init__(self, import_name, db_path=None, **kwargs):
         super().__init__(import_name, **kwargs)
-        self._view_models = {}
-        self._models = []
 
         if db_path:
             self._init_db(db_path)
@@ -96,13 +107,10 @@ class App(q.Quart):
             # db.Model.query = property(lambda m_inst: AsyncObjectProxy(self, og_query))
             # db.session = AsyncObjectProxy(self, db.session)
 
-    def model(self, cls):
-        self._models.append(cls)
-        return cls
-
+    @deprecated("Import the view_model decorator directly from Hybridoma instead.")
     def view_model(self, template):
         def decorator(cls):
-            self._view_models[cls.__name__] = {"class": cls, "template": template}
+            _VIEW_MODELS[cls.__name__] = {"class": cls, "template": template}
             @wraps(cls)
             def wrapper(*args, **kwargs):
                 return cls(*args, **kwargs)
@@ -140,14 +148,14 @@ class App(q.Quart):
 
         if isinstance(view_model, str):
             vm_name = view_model
-            if vm_name not in self._view_models:
-                raise NameError(f"ViewModel '{vm_name}' is not registered with @app.view_model")
-            vm_class = self._view_models[vm_name]['class']
+            if vm_name not in _VIEW_MODELS:
+                raise NameError(f"ViewModel '{vm_name}' is not registered with @view_model")
+            vm_class = _VIEW_MODELS[vm_name]['class']
         else:
             vm_class = view_model
             vm_name = vm_class.__name__
 
-        vm_info = self._view_models[vm_name]
+        vm_info = _VIEW_MODELS[vm_name]
         template_path = vm_info['template']
 
         if _instance:
@@ -198,8 +206,8 @@ class App(q.Quart):
                         vm_name = comp_info.get('vm_name')
                         hy_id = comp_info.get('hy_id')
 
-                        if vm_name in self._view_models:
-                            vm_class = self._view_models[vm_name]['class']
+                        if vm_name in _VIEW_MODELS:
+                            vm_class = _VIEW_MODELS[vm_name]['class']
                             vm_instance = vm_class()
                             if hasattr(vm_instance, 'mount'):
                                 await self.ensure_async(vm_instance.mount)()
@@ -270,8 +278,6 @@ class App(q.Quart):
             loop.remove_signal_handler(signal.SIGINT)
             loop.remove_signal_handler(signal.SIGTERM)
 
-
-class Model(p.BaseModel): ...
 
 class ViewModel():
     def get_state(self): return {k: v for k, v in self.__dict__.items() if not k.startswith('_') and not callable(v)}

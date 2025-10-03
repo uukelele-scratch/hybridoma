@@ -1,8 +1,9 @@
 from .hybridoma import (
     App,
     db,
-    ViewModel, Model,
+    ViewModel,
     HyDB,
+    view_model
 )
 from quart import render_template
 from quart import (
