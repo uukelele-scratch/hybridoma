@@ -116,6 +116,26 @@ if (components.length > 0) {
             console.log(`[ws] Sent:`, payload)
         }
     })
+
+    window.hy = {}
+    hy.action = (vmName, action) => {
+        if (!viewModelName || !action || !action.name) {
+            console.error("[hy.action] Error: You must provide a viewModelName and an action object with a 'name' property.");
+            return;
+        }
+        const componentRoot = document.querySelector(`[hy-vm="${viewModelName}"]`);
+        if (!componentRoot) {
+            console.error(`[hy.action] Error: Could not find a component for ViewModel '${viewModelName}'.`);
+            return;
+        }
+        const payload = {
+            type: 'action',
+            hy_id: componentRoot.id,
+            ...action
+        };
+        ws.send(JSON.stringify(payload));
+        console.log(`[ws] Sent:`, payload)
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
