@@ -44,6 +44,8 @@ if (components.length > 0) {
             vm_name: el.getAttribute('hy-vm'),
         }));
         ws.send(JSON.stringify({ type: 'init', components: componentsToInit }));
+        const event = new CustomEvent('hy:connected');
+        document.dispatchEvent(event);
     }
 
     ws.onmessage = (event) => {
