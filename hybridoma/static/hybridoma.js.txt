@@ -118,7 +118,7 @@ if (components.length > 0) {
     })
 
     window.hy = {}
-    hy.action = (vmName, action) => {
+    hy.action = (viewModelName, action) => {
         if (!viewModelName || !action || !action.name) {
             console.error("[hy.action] Error: You must provide a viewModelName and an action object with a 'name' property.");
             return;
