@@ -16,7 +16,7 @@ def static_file(name):
         return file.read()
 
 HYBRIDOMA_JS  = static_file('hybridoma.js.txt')
-HYBRIDOMA_CSS = static_file('pico.classless.min.css')
+HYBRIDOMA_CSS = static_file('pico.min.css')
 MORPHDOM_JS   = static_file('morphdom.min.js.txt')
 LUCIDE_JS     = static_file('lucide.min.js.txt')
 
