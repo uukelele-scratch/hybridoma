@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculator</title>
+    {{ hy.css() }}
+</head>
+<body>
+    <main class="container">
+        <input type="number" name="num1">
+        <input type="number" name="num2">
+        <button type="submit">{{ hy.icon("plus") }}</button>
+        <input type="number" readonly name="result">
+    </main>
+
+    <script>
+        const $ = document.querySelector.bind(document);
+        $('button[type="submit"]').addEventListener('click', async (e) => {
+            try {
+                const num1 = parseFloat($('input[name="num1"]').value);
+                const num2 = parseFloat($('input[name="num2"]').value);
+
+                const result = await portal.add(num1, num2);
+
+                $('input[name="result"]').value = result;
+            } catch (err) {
+                $('input[name="result"]').type = "text";
+                $('input[name="result"]').value = err;
+                $('input[name="result"]').ariaInvalid = true;
+            }
+        });
+    </script>
+</body>
+</html>

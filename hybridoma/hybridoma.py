@@ -21,6 +21,7 @@ MORPHDOM_JS   = static_file('morphdom.min.js.txt')
 LUCIDE_JS     = static_file('lucide.min.js.txt')
 
 _VIEW_MODELS = {}
+_EXPOSED_FUNCTIONS = {}
 
 def view_model(template):
     def decorator(cls):
@@ -30,6 +31,10 @@ def view_model(template):
             return cls(*args, **kwargs)
         return wrapper
     return decorator
+
+def expose(func):
+    _EXPOSED_FUNCTIONS[func.__name__] = func
+    return func
 
 
 
@@ -220,30 +225,46 @@ class App(q.Quart):
 
                     print(f"[ws] Received: {data}")
 
-                    hy_id = data.get('hy_id')
-                    vm_instance = vm_instances.get(hy_id)
+                    if data['type'] == 'action':
+                        hy_id = data.get('hy_id')
+                        vm_instance = vm_instances.get(hy_id)
 
-                    if not vm_instance:
-                        print(f"[ws] Received action for unknown component ID: {hy_id}")
-                        continue
+                        if not vm_instance:
+                            print(f"[ws] Received action for unknown component ID: {hy_id}")
+                            continue
 
-                    action_name: str = data.get('name')
-                    args = data.get('args', [])
+                        action_name: str = data.get('name')
+                        args = data.get('args', [])
 
-                    action_method = getattr(vm_instance, action_name, None)
-                    if callable(action_method):
-                        await self.ensure_async(action_method)(*args)
-                        vm_name = vm_instance.__class__.__name__
-                        html = await self._render_component_for_template(
-                            vm_name,
-                            _instance = vm_instance,
-                            _hy_id = hy_id,
-                        )
-                        await ws.send_json({ 'type': 'update', 'html': str(html), 'id': hy_id })
+                        action_method = getattr(vm_instance, action_name, None)
+                        if callable(action_method):
+                            await self.ensure_async(action_method)(*args)
+                            vm_name = vm_instance.__class__.__name__
+                            html = await self._render_component_for_template(
+                                vm_name,
+                                _instance = vm_instance,
+                                _hy_id = hy_id,
+                            )
+                            await ws.send_json({ 'type': 'update', 'html': str(html), 'id': hy_id })
+                        else:
+                            msg = f"[ws] [!] Could not find action {action_name} on {vm_class} ({action_method})."
+                            if action_name.endswith("()"): msg += f" Perhaps you meant: {action_name.removesuffix('()')}"
+                            print(msg)
+                    elif data['type'] == 'rpc':
+                        func_name = data['name']
+                        func_args = data['args']
+                        call_id = data['id']
+
+                        if func_name in _EXPOSED_FUNCTIONS:
+                            target_func = _EXPOSED_FUNCTIONS[func_name]
+                            try:
+                                result = await self.ensure_async(target_func)(*func_args)
+                                await ws.send_json({ "id": call_id, "result": result })
+                            except Exception as e:
+                                await ws.send_json({ "id": call_id, "error": str(e) })
+
                     else:
-                        msg = f"[ws] [!] Could not find action {action_name} on {vm_class} ({action_method})."
-                        if action_name.endswith("()"): msg += f" Perhaps you meant: {action_name.removesuffix('()')}"
-                        print(msg)
+                        print(f"[ws] [!] Unknown type: {data['type']}")
             except asyncio.CancelledError:
                 print("[ws] client disconnected.")
 

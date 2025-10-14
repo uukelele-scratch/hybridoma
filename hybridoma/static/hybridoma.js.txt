@@ -32,110 +32,134 @@ function parseAction(actionStr) {
     return { name: actionStr, args: [] };
 }
 
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${protocol}//${window.location.host}/_hy/ws`);
+
+/* Portal */
+let callId = 0;
+const pendingCalls = new Map();
+const portal = new Proxy({}, { 
+    get(target, prop) {
+        return async function(...args) {
+            return new Promise((resolve, reject) => {
+                const id = ++callId;
+                pendingCalls.set(id, { resolve, reject });
+                ws.send(JSON.stringify({ type: 'rpc', id, name: prop, args }))
+            })
+        }
+    }
+ });
+window.portal = portal;
+
 const components = document.querySelectorAll('[hy-vm]');
-if (components.length > 0) {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/_hy/ws`);
+ws.onopen = () => {
+    console.log("[+] Connected.");
+    const componentsToInit = Array.from(components).map(el => ({
+        hy_id: el.id,
+        vm_name: el.getAttribute('hy-vm'),
+    }));
+    ws.send(JSON.stringify({ type: 'init', components: componentsToInit }));
+    const event = new CustomEvent('hy:connected');
+    document.dispatchEvent(event);
+}
 
-    ws.onopen = () => {
-        console.log("[+] Connected.");
-        const componentsToInit = Array.from(components).map(el => ({
-            hy_id: el.id,
-            vm_name: el.getAttribute('hy-vm'),
-        }));
-        ws.send(JSON.stringify({ type: 'init', components: componentsToInit }));
-        const event = new CustomEvent('hy:connected');
-        document.dispatchEvent(event);
-    }
-
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log(`[ws] Received:`, data)
-        if (data.type === 'update' && data.id) {
-            const targetEl = document.getElementById(data.id);
-            if (targetEl) {
-                morphdom(targetEl, data.html);
-                window.lucide?.createIcons();
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(`[ws] Received:`, data)
+    if (data.type === 'update' && data.id) {
+        const targetEl = document.getElementById(data.id);
+        if (targetEl) {
+            morphdom(targetEl, data.html);
+            window.lucide?.createIcons();
+        }
+    } else if (data.id && (data.result || data.error)) {
+        if (pendingCalls.has(data.id)) {
+            const { resolve, reject } = pendingCalls.get(data.id);
+            if (data.error) {
+                reject(new Error(data.error));
+            } else {
+                resolve(data.result);
             }
+            pendingCalls.delete(data.id);
         }
     }
+}
 
-    document.addEventListener('DOMContentLoaded', () => {
-        scanAndInitialize(document.body);
-    })
+document.addEventListener('DOMContentLoaded', () => {
+    scanAndInitialize(document.body);
+})
 
-    const observer = new MutationObserver((mutationsList) => {
-        for (const mutation of mutationsList) {
-            if (mutation.type === 'childList') {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === 1) { 
-                        scanAndInitialize(node);
-                    }
-                });
-            }
+const observer = new MutationObserver((mutationsList) => {
+    for (const mutation of mutationsList) {
+        if (mutation.type === 'childList') {
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1) { 
+                    scanAndInitialize(node);
+                }
+            });
         }
-    });
+    }
+});
 
-    components.forEach(component => {
-        observer.observe(component, { childList: true, subtree: true });
-    })
+components.forEach(component => {
+    observer.observe(component, { childList: true, subtree: true });
+})
 
-    document.addEventListener('click', (e) => {
-        const target = e.target.closest('[hy-click]');
-        const componentRoot = target?.closest('[hy-vm]');
-        if (target && componentRoot) {
-            const actionStr = target.getAttribute('hy-click');
-            const action = parseAction(actionStr);
-            if (action) {
-                const payload = {
-                    type: 'action',
-                    hy_id: componentRoot.id,
-                    ...action
-                };
-                ws.send(JSON.stringify(payload));
-                console.log(`[ws] Sent:`, payload)
-            }
-        }
-    })
-
-    document.addEventListener('submit', (e) => {
-        const form = e.target.closest('form[hy-submit]');
-        const componentRoot = form?.closest('[hy-vm]');
-        if (form && componentRoot) {
-            e.preventDefault();
-            const actionStr = form.getAttribute('hy-submit');
-            const formData = new FormData(form);
-            const formPayload = Object.fromEntries(formData.entries());
+document.addEventListener('click', (e) => {
+    const target = e.target.closest('[hy-click]');
+    const componentRoot = target?.closest('[hy-vm]');
+    if (target && componentRoot) {
+        const actionStr = target.getAttribute('hy-click');
+        const action = parseAction(actionStr);
+        if (action) {
             const payload = {
                 type: 'action',
                 hy_id: componentRoot.id,
-                name: actionStr,
-                args: [formPayload]
+                ...action
             };
             ws.send(JSON.stringify(payload));
             console.log(`[ws] Sent:`, payload)
         }
-    })
+    }
+})
 
-    window.hy = {}
-    hy.action = (viewModelName, action) => {
-        if (!viewModelName || !action || !action.name) {
-            console.error("[hy.action] Error: You must provide a viewModelName and an action object with a 'name' property.");
-            return;
-        }
-        const componentRoot = document.querySelector(`[hy-vm="${viewModelName}"]`);
-        if (!componentRoot) {
-            console.error(`[hy.action] Error: Could not find a component for ViewModel '${viewModelName}'.`);
-            return;
-        }
+document.addEventListener('submit', (e) => {
+    const form = e.target.closest('form[hy-submit]');
+    const componentRoot = form?.closest('[hy-vm]');
+    if (form && componentRoot) {
+        e.preventDefault();
+        const actionStr = form.getAttribute('hy-submit');
+        const formData = new FormData(form);
+        const formPayload = Object.fromEntries(formData.entries());
         const payload = {
             type: 'action',
             hy_id: componentRoot.id,
-            ...action
+            name: actionStr,
+            args: [formPayload]
         };
         ws.send(JSON.stringify(payload));
         console.log(`[ws] Sent:`, payload)
     }
+})
+
+window.hy = {}
+hy.action = (viewModelName, action) => {
+    if (!viewModelName || !action || !action.name) {
+        console.error("[hy.action] Error: You must provide a viewModelName and an action object with a 'name' property.");
+        return;
+    }
+    const componentRoot = document.querySelector(`[hy-vm="${viewModelName}"]`);
+    if (!componentRoot) {
+        console.error(`[hy.action] Error: Could not find a component for ViewModel '${viewModelName}'.`);
+        return;
+    }
+    const payload = {
+        type: 'action',
+        hy_id: componentRoot.id,
+        ...action
+    };
+    ws.send(JSON.stringify(payload));
+    console.log(`[ws] Sent:`, payload)
 }
 
 document.addEventListener('DOMContentLoaded', () => {

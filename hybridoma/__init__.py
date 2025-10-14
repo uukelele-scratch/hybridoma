@@ -3,7 +3,8 @@ from .hybridoma import (
     db,
     ViewModel,
     HyDB,
-    view_model
+    view_model,
+    expose
 )
 from quart import render_template
 from quart import (
