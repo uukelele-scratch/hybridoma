@@ -142,7 +142,7 @@ class App(q.Quart):
             html += script
 
         self = q.current_app._get_current_object()
-        if not self.debug:
+        if self.config["MINIFIY_HTML"]:
             html = minify_html.minify(html, minify_css=True, minify_js=True)
 
         return Markup(html)
