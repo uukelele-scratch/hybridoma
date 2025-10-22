@@ -1,6 +1,6 @@
 [project]
 name = "hybridoma"
-version = "0.3.2"
+version = "0.3.3"
 authors = [
   { name="uukelele", email="robustrobot11@gmail.com" },
 ]

@@ -262,6 +262,8 @@ class App(q.Quart):
                                 await ws.send_json({ "id": call_id, "result": result })
                             except Exception as e:
                                 await ws.send_json({ "id": call_id, "error": str(e) })
+                        else:
+                            await ws.send_json({ "id": call_id, "error": f"Function {func_name} not exposed with @expose." })
 
                     else:
                         print(f"[ws] [!] Unknown type: {data['type']}")
