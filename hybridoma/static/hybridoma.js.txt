@@ -1,6 +1,7 @@
-if(!$DEBUG)console.log=()=>{}
+function log(...args) { console.log(...args) }
+if(!$DEBUG)log=()=>{}
 
-console.log("[+] hy-client injected.")
+log("[+] hy-client injected.")
 
 function scanAndInitialize(rootElement) {
     const elementsToInit = rootElement.querySelectorAll('[hy-init]');
@@ -53,7 +54,7 @@ window.portal = portal;
 
 const components = document.querySelectorAll('[hy-vm]');
 ws.onopen = () => {
-    console.log("[+] Connected.");
+    log("[+] Connected.");
     const componentsToInit = Array.from(components).map(el => ({
         hy_id: el.id,
         vm_name: el.getAttribute('hy-vm'),
@@ -65,7 +66,7 @@ ws.onopen = () => {
 
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    console.log(`[ws] Received:`, data)
+    log(`[ws] Received:`, data)
     if (data.type === 'update' && data.id) {
         const targetEl = document.getElementById(data.id);
         if (targetEl) {
@@ -118,7 +119,7 @@ document.addEventListener('click', (e) => {
                 ...action
             };
             ws.send(JSON.stringify(payload));
-            console.log(`[ws] Sent:`, payload)
+            log(`[ws] Sent:`, payload)
         }
     }
 })
@@ -138,7 +139,7 @@ document.addEventListener('submit', (e) => {
             args: [formPayload]
         };
         ws.send(JSON.stringify(payload));
-        console.log(`[ws] Sent:`, payload)
+        log(`[ws] Sent:`, payload)
     }
 })
 
@@ -159,7 +160,7 @@ hy.action = (viewModelName, action) => {
         ...action
     };
     ws.send(JSON.stringify(payload));
-    console.log(`[ws] Sent:`, payload)
+    log(`[ws] Sent:`, payload)
 }
 
 document.addEventListener('DOMContentLoaded', () => {
