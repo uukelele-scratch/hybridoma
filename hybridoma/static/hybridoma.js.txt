@@ -73,7 +73,7 @@ ws.onmessage = (event) => {
             morphdom(targetEl, data.html);
             window.lucide?.createIcons();
         }
-    } else if (data.id && (data.result || data.error)) {
+    } else if (data.id && ('result' in data || 'error' in data)) {
         if (pendingCalls.has(data.id)) {
             const { resolve, reject } = pendingCalls.get(data.id);
             if (data.error) {
