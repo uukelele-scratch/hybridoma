@@ -261,6 +261,8 @@ class App(q.Quart):
                                 result = await self.ensure_async(target_func)(*func_args)
                                 await ws.send_json({ "id": call_id, "result": result })
                             except Exception as e:
+                                import traceback
+                                traceback.print_exc()
                                 await ws.send_json({ "id": call_id, "error": str(e) })
                         else:
                             await ws.send_json({ "id": call_id, "error": f"Function {func_name} not exposed with @expose." })
