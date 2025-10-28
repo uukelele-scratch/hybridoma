@@ -223,7 +223,7 @@ class App(q.Quart):
                 while True:
                     data = await ws.receive_json()
 
-                    print(f"[ws] Received: {data}")
+                    # print(f"[ws] Received: {data}")
 
                     if data['type'] == 'action':
                         hy_id = data.get('hy_id')
