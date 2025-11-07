@@ -10,6 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 from contextlib import asynccontextmanager
 from warnings import deprecated
+import msgpack
 
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
@@ -19,6 +20,7 @@ HYBRIDOMA_JS  = static_file('hybridoma.js.txt')
 HYBRIDOMA_CSS = static_file('pico.min.css')
 MORPHDOM_JS   = static_file('morphdom.min.js.txt')
 LUCIDE_JS     = static_file('lucide.min.js.txt')
+MSGPACK_JS    = static_file('msgpack.min.js')
 
 _VIEW_MODELS = {}
 _EXPOSED_FUNCTIONS = {}
@@ -32,11 +34,18 @@ def view_model(template):
         return wrapper
     return decorator
 
+@deprecated("Replace `from hybridoma import expose` to `from hybridoma import portal`. Then use `@portal.expose`. Or, use `from hybridoma.portal import expose`.")
 def expose(func):
     _EXPOSED_FUNCTIONS[func.__name__] = func
     return func
+    # keep for backwards compatibility.
 
+class Portal:
+    def expose(func):
+        _EXPOSED_FUNCTIONS[func.__name__] = func
+        return func
 
+portal = Portal()
 
 class HyHelpers:
     def __init__(self, app: "App"):
@@ -128,6 +137,7 @@ class App(q.Quart):
         script = str(
             '<script src="/_hy/lucide.js"></script>'
             '<script src="/_hy/morphdom.js"></script>'
+            '<script src="/_hy/msgpack.js"></script>'
             '<script src="/_hy/hy.js" type="module" defer></script>'
         )
         
@@ -193,6 +203,10 @@ class App(q.Quart):
         @self.route('/_hy/lucide.js')
         def serve_lucide():
             return LUCIDE_JS, 200, {'Content-Type': 'application/javascript'}
+        
+        @self.route('/_hy/msgpack.js')
+        def serve_msgpack():
+            return MSGPACK_JS, 200, {'Content-Type': 'application/javascript'}
 
         @self.route('/_hy/hy.css')
         def serve_css():
@@ -202,9 +216,10 @@ class App(q.Quart):
         async def websocket():
             ws = q.websocket
             vm_instances = {}
-            print("[ws] client connected.")
+            # print("[ws] client connected.")
             try:
-                init_data = await ws.receive_json() 
+                init_data = await ws.receive()
+                init_data = msgpack.loads(init_data)
                 if init_data.get('type') == 'init':
                     components = init_data.get('components', [])
                     for comp_info in components:
@@ -218,10 +233,11 @@ class App(q.Quart):
                                 await self.ensure_async(vm_instance.mount)()
 
                             vm_instances[hy_id] = vm_instance
-                            print(f"[ws] Initialized VM '{vm_name}' for component '{hy_id}'.")           
+                            # print(f"[ws] Initialized VM '{vm_name}' for component '{hy_id}'.")           
             
                 while True:
-                    data = await ws.receive_json()
+                    data = await ws.receive()
+                    data = msgpack.loads(data)
 
                     # print(f"[ws] Received: {data}")
 
@@ -230,7 +246,7 @@ class App(q.Quart):
                         vm_instance = vm_instances.get(hy_id)
 
                         if not vm_instance:
-                            print(f"[ws] Received action for unknown component ID: {hy_id}")
+                            print(f"[ws] [!] Received action for unknown component ID: {hy_id}")
                             continue
 
                         action_name: str = data.get('name')
@@ -245,7 +261,7 @@ class App(q.Quart):
                                 _instance = vm_instance,
                                 _hy_id = hy_id,
                             )
-                            await ws.send_json({ 'type': 'update', 'html': str(html), 'id': hy_id })
+                            await ws.send(msgpack.dumps({ 'type': 'update', 'html': str(html), 'id': hy_id }))
                         else:
                             msg = f"[ws] [!] Could not find action {action_name} on {vm_class} ({action_method})."
                             if action_name.endswith("()"): msg += f" Perhaps you meant: {action_name.removesuffix('()')}"
@@ -259,18 +275,19 @@ class App(q.Quart):
                             target_func = _EXPOSED_FUNCTIONS[func_name]
                             try:
                                 result = await self.ensure_async(target_func)(*func_args)
-                                await ws.send_json({ "id": call_id, "result": result })
+                                await ws.send(msgpack.dumps({ "id": call_id, "result": result }))
                             except Exception as e:
                                 import traceback
                                 traceback.print_exc()
-                                await ws.send_json({ "id": call_id, "error": str(e) })
+                                await ws.send(msgpack.dumps({ "id": call_id, "error": str(e) }))
                         else:
-                            await ws.send_json({ "id": call_id, "error": f"Function {func_name} not exposed with @expose." })
+                            await ws.send(msgpack.dumps({ "id": call_id, "error": f"Function {func_name} does not exist, or not exposed with @expose." }))
 
                     else:
                         print(f"[ws] [!] Unknown type: {data['type']}")
             except asyncio.CancelledError:
-                print("[ws] client disconnected.")
+                # print("[ws] client disconnected.")
+                ...
 
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
