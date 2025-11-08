@@ -4,7 +4,8 @@ from .hybridoma import (
     ViewModel,
     HyDB,
     view_model,
-    expose
+    expose,
+    portal,
 )
 from quart import render_template
 from quart import (
