@@ -41,6 +41,7 @@ ws.binaryType = "arraybuffer";
 
 /* Portal */
 let callId = 0;
+const portalEventListeners = new Map();
 const pendingCalls = new Map();
 const portal = new Proxy({}, { 
     get(target, prop) {
@@ -55,6 +56,15 @@ const portal = new Proxy({}, {
  });
 window.portal = portal; // for backwards compatibility
 hy.portal = portal;
+
+portal.addEventListener = (eventName,  callback) => {
+    if (!portalEventListeners.has(eventName)) {
+        portalEventListeners.set(eventName, []);
+    }
+    portalEventListeners.get(eventName).push(callback);
+};
+// portal.on = portal.addEventListener
+// ^^ maybe? or it pollutes namespace for `await portal.on(...)` if `@expose def on():`
 
 
 hy.refreshIcons = window.lucide.createIcons;
@@ -89,6 +99,17 @@ ws.onmessage = (event) => {
                 resolve(data.result);
             }
             pendingCalls.delete(data.id);
+        }
+    } else if (data.type === 'event') {
+        if (portalEventListeners.has(data.name)) {
+            const args = data.payload.args || [];
+            const kwargs = data.payload.kwargs || {};
+
+            for (const callback of portalEventListeners.get(data.name)) {
+                callback(...args, kwargs);
+            }
+        } else {
+            console.warn(`[!] [portal] No event listener for event ${data.name} exists!`)
         }
     }
 }

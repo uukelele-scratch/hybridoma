@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from contextlib import asynccontextmanager
 from warnings import deprecated
 import msgpack
+from contextvars import ContextVar
 
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
@@ -40,10 +41,31 @@ def expose(func):
     return func
     # keep for backwards compatibility.
 
+active_ws_ctx = ContextVar('active_ws', default=None)
+
 class Portal:
     def expose(func):
         _EXPOSED_FUNCTIONS[func.__name__] = func
         return func
+    
+    def __getattr__(self, name):
+        async def emitter(*args, **kwargs):
+
+            ws = active_ws_ctx.get()
+
+            if not ws:
+                raise Exception("[portal] [!] portal function called outside RPC. portal can only be used inside an exposed function.")
+            
+            await ws.send(msgpack.dumps({
+                "type": "event",
+                "name": name,
+                "payload": {
+                    "args": list(args),
+                    "kwargs": dict(kwargs)
+                },
+            }))
+
+        return emitter
 
 portal = Portal()
 
@@ -273,6 +295,7 @@ class App(q.Quart):
 
                         if func_name in _EXPOSED_FUNCTIONS:
                             target_func = _EXPOSED_FUNCTIONS[func_name]
+                            active_ws_ctx.set(ws)
                             try:
                                 result = await self.ensure_async(target_func)(*func_args)
                                 await ws.send(msgpack.dumps({ "id": call_id, "result": result }))
