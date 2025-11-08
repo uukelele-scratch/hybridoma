@@ -40,12 +40,48 @@ const ws = new WebSocket(`${protocol}//${window.location.host}/_hy/ws`);
 ws.binaryType = "arraybuffer";
 
 /* Portal */
+class Portal extends EventTarget {
+    constructor() {
+        super();
+        this._emitter = new Map();
+    }
+
+    on(name, cb) {
+        if (!this._emitter.has(name)) this._emitter.set(name, new Set());
+        this._emitter.get(name).add(cb);
+    }
+
+    off(name, cb) {
+        if (!this._emitter.has(name)) return;
+        const s = this._emitter.get(name);
+        s.delete(cb);
+        if (!s.size) this._emitter.delete(name);
+    }
+
+    once(name, cb) {
+        const wrapper = (...args) => { this.off(name, wrapper); cb(...args); };
+        this.on(name,  wrapper);
+    }
+
+    _emit(name, args=[], kwargs={}) {
+        if (this._emitter.has(name)) {
+            for (const cb of Array.from(this._emitter.get(name))) {
+                try { cb(...args, kwargs); } catch(e) { console.error(e); }
+            }
+        }
+    }
+}
+
 let callId = 0;
-const portalEventListeners = new Map();
 const pendingCalls = new Map();
-const portal = new Proxy({}, { 
+
+const portalBase = new Portal();
+
+const portal = new Proxy(portalBase, { 
     get(target, prop) {
-        return async function(...args) {
+        if (prop in target) return target[prop];
+
+        return async (...args) => {
             return new Promise((resolve, reject) => {
                 const id = ++callId;
                 pendingCalls.set(id, { resolve, reject });
@@ -54,18 +90,9 @@ const portal = new Proxy({}, {
         }
     }
  });
+
 window.portal = portal; // for backwards compatibility
 hy.portal = portal;
-
-portal.addEventListener = (eventName,  callback) => {
-    if (!portalEventListeners.has(eventName)) {
-        portalEventListeners.set(eventName, []);
-    }
-    portalEventListeners.get(eventName).push(callback);
-};
-// portal.on = portal.addEventListener
-// ^^ maybe? or it pollutes namespace for `await portal.on(...)` if `@expose def on():`
-
 
 hy.refreshIcons = window.lucide.createIcons;
 
@@ -101,16 +128,11 @@ ws.onmessage = (event) => {
             pendingCalls.delete(data.id);
         }
     } else if (data.type === 'event') {
-        if (portalEventListeners.has(data.name)) {
-            const args = data.payload.args || [];
-            const kwargs = data.payload.kwargs || {};
+        const args = data.payload?.args ?? [];
+        const kwargs = data.payload?.kwargs ?? {};
 
-            for (const callback of portalEventListeners.get(data.name)) {
-                callback(...args, kwargs);
-            }
-        } else {
-            console.warn(`[!] [portal] No event listener for event ${data.name} exists!`)
-        }
+        portalBase.dispatchEvent(new CustomEvent(data.name, { detail: { args, kwargs } }));
+        portal._emit(data.name, args, kwargs);
     }
 }
 
