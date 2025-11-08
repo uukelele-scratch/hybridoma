@@ -44,7 +44,7 @@ def expose(func):
 active_ws_ctx = ContextVar('active_ws', default=None)
 
 class Portal:
-    def expose(func):
+    def expose(self, func):
         _EXPOSED_FUNCTIONS[func.__name__] = func
         return func
     
