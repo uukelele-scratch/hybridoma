@@ -1,8 +1,8 @@
-from hybridoma import App, expose
+from hybridoma import App, portal
 
 app = App(__name__)
 
-@expose
+@portal.expose
 def add(a, b):
     # raise ArithmeticError("Example")
     return a + b

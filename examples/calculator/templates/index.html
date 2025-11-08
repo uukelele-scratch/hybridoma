@@ -21,7 +21,7 @@
                 const num1 = parseFloat($('input[name="num1"]').value);
                 const num2 = parseFloat($('input[name="num2"]').value);
 
-                const result = await portal.add(num1, num2);
+                const result = await hy.portal.add(num1, num2);
 
                 $('input[name="result"]').value = result;
             } catch (err) {
