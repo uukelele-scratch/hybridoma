@@ -161,6 +161,7 @@ class App(q.Quart):
             '<script src="/_hy/morphdom.js"></script>'
             '<script src="/_hy/msgpack.js"></script>'
             '<script src="/_hy/hy.js" type="module" defer></script>'
+            '<!-- Built with hybridoma (https://github.com/uukelele-scratch/hybridoma) -->'
         )
         
         html, subs_made = re.subn(
