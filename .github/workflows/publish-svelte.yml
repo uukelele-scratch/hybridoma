@@ -20,6 +20,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           always-auth: true
       
+      - name: Update npm
+        run: npm i -g npm@latest
+
       - name: Install dependencies and publish
         working-directory: ./hybridoma-svelte
         run: npm ci && npm publish --provenance
