@@ -12,6 +12,9 @@ from contextlib import asynccontextmanager
 from warnings import deprecated
 import msgpack
 from contextvars import ContextVar
+import redis.asyncio as redis
+from typing import Optional
+from werkzeug.http import parse_cookie
 
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
@@ -43,18 +46,97 @@ def expose(func):
 
 active_ws_ctx = ContextVar('active_ws', default=None)
 
+class ConnectionManager:
+    def __init__(self):
+        self.local_active: dict[str, set] = {}
+        self.redis: Optional[redis.Redis] = None
+        self.channel_name = "hybridoma:broadcast"
+
+    def init_redis(self, url):
+        self.redis = redis.from_url(url)
+
+    def add(self, user_id, ws):
+        if user_id not in self.local_active:
+            self.local_active[user_id] = set()
+        self.local_active[user_id].add(ws)
+
+    def remove(self, user_id, ws):
+        if user_id in self.local_active:
+            self.local_active[user_id].discard(ws)
+            if not self.local_active[user_id]:
+                del self.local_active[user_id]
+
+    async def broadcast(self, user_ids: list[str], event_name: str, args: list, kwargs: dict):
+        payload = msgpack.dumps({
+            "target_users": user_ids,
+            "type": "event",
+            "name": event_name,
+            "payload": {"args": args, "kwargs": kwargs}
+        })
+
+        if self.redis:
+            await self.redis.publish(self.channel_name, payload)
+        else:
+            await self._send_local(user_ids, payload)
+
+    async def _send_local(self, user_ids, payload):
+        for user_id in user_ids:
+            if user_id in self.local_active:
+                sockets = list(self.local_active[user_id])
+                for ws in sockets:
+                    try:
+                        await ws.send(payload)
+                    except: pass
+
+    async def start_redis(self):
+        if not self.redis: return
+
+        pubsub = self.redis.pubsub()
+
+        await pubsub.subscribe(self.channel_name)
+
+        async for message in pubsub.listen():
+            if message['type'] == 'message':
+                data = msgpack.loads(message['data'])
+                target_users = data.get('target_users', [])
+                await self._send_local(target_users, message['data']) # already msgpack packed
+
+manager = ConnectionManager()
+
+class ConnectionContext:
+    def __init__(self, scope):
+        self.headers = {key.decode('utf-8').lower(): value.decode('utf-8') for key, value in scope['headers']}
+        self.cookies = parse_cookie(self.headers.get('cookie', ''))
+
+class PortalTarget:
+    def __init__(self, user_ids):
+        self.user_ids = user_ids
+
+    def __getattr__(self, name):
+        async def emitter(*args, **kwargs):
+            await manager.broadcast(self.user_ids, name, list(args), dict(kwargs))
+        return emitter
+
 class Portal:
     def expose(self, func):
         _EXPOSED_FUNCTIONS[func.__name__] = func
         return func
     
+    def to(self, *args):
+        targets = []
+        [targets.extend(arg) if isinstance(arg, list) else targets.append(arg) for arg in args]
+        return PortalTarget(targets)
+    
     def __getattr__(self, name):
+
+        if name == 'to': return self.to
+
         async def emitter(*args, **kwargs):
 
             ws = active_ws_ctx.get()
 
             if not ws:
-                raise Exception("[portal] [!] portal function called outside RPC. portal can only be used inside an exposed function.")
+                raise Exception("[portal] [!] portal function called outside RPC. portal can only be used inside an exposed function. otherwise, consider using `portal.to`.")
             
             await ws.send(msgpack.dumps({
                 "type": "event",
@@ -107,11 +189,14 @@ class HyDB(SQLAlchemy):
 db = HyDB()
 
 class App(q.Quart):
-    def __init__(self, import_name, db_path=None, **kwargs):
+    def __init__(self, import_name, db_path=None, redis_url=None, **kwargs):
         super().__init__(import_name, **kwargs)
 
-        if db_path:
-            self._init_db(db_path)
+        if db_path: self._init_db(db_path)
+
+        if redis_url: manager.init_redis(redis_url)
+
+        self._identity_loader = None
 
         self._register_hy_routes()
 
@@ -132,6 +217,15 @@ class App(q.Quart):
                 return self._original_ensure_async(func)
 
         self.ensure_async = smart_ensure_async
+
+        @self.before_serving
+        async def start_redis():
+            if manager.redis:
+                self.add_background_task(manager.start_redis)
+
+    def identity_loader(self, func):
+        self.identity_loader = func
+        return func
 
     def _init_db(self, db_path):
         self.config['SQLALCHEMY_DATABASE_URI'] = db_path
@@ -239,6 +333,19 @@ class App(q.Quart):
         async def websocket():
             ws = q.websocket
             vm_instances = {}
+            current_uid = None
+
+            if self._identity_loader:
+                try:
+                    ctx = ConnectionContext(ws.scope)
+                    current_uid = await self.ensure_async(self._identity_loader)(ctx)
+                    if current_uid:
+                        manager.add(current_uid, ws)
+                except Exception as e:
+                    print(f"[ws] identity loader error")
+                    import traceback
+                    traceback.print_exc()
+
             # print("[ws] client connected.")
             try:
                 init_data = await ws.receive()
@@ -312,6 +419,8 @@ class App(q.Quart):
             except asyncio.CancelledError:
                 # print("[ws] client disconnected.")
                 ...
+            finally:
+                if current_uid: manager.remove(current_uid, ws)
 
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')
