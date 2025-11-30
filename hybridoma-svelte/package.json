@@ -1,6 +1,6 @@
 {
   "name": "hybridoma-svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The official Svelte client for the Hybridoma Python backend.",
   "keywords": [
     "svelte",
@@ -20,6 +20,7 @@
   "license": "MIT",
   "author": "uukelele-scratch",
   "type": "module",
+  "types": "src/index.d.ts",
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
