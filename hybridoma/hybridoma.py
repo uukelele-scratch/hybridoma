@@ -15,6 +15,7 @@ from contextvars import ContextVar
 import redis.asyncio as redis
 from typing import Optional
 from werkzeug.http import parse_cookie
+from werkzeug.local import LocalProxy
 
 def static_file(name):
     with open(os.path.join(os.path.dirname(__file__), 'static', name)) as file:
@@ -45,6 +46,9 @@ def expose(func):
     # keep for backwards compatibility.
 
 active_ws_ctx = ContextVar('active_ws', default=None)
+active_user_ctx = ContextVar('active_user', default=None)
+
+active_user = LocalProxy(active_user_ctx.get)
 
 class ConnectionManager:
     def __init__(self):
@@ -339,6 +343,7 @@ class App(q.Quart):
                 try:
                     ctx = ConnectionContext(ws.scope)
                     current_uid = await self.ensure_async(self._identity_loader)(ctx)
+                    token = active_user_ctx.set(current_uid)
                     if current_uid:
                         manager.add(current_uid, ws)
                 except Exception as e:
@@ -421,6 +426,7 @@ class App(q.Quart):
                 ...
             finally:
                 if current_uid: manager.remove(current_uid, ws)
+                active_user_ctx.reset(token)
 
     def _render_css(self):
         return Markup('<link rel="stylesheet" href="/_hy/hy.css">')

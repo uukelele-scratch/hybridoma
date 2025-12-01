@@ -6,6 +6,7 @@ from .hybridoma import (
     view_model,
     expose,
     portal,
+    active_user,
 )
 from quart import render_template
 from quart import (
