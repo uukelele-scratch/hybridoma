@@ -17,6 +17,13 @@ class PortalBase extends EventTarget {
             return url;
         }
 
+        if (typeof window === "undefined") {
+            if (url) {
+                return url.startsWith('/') ? url : '/' + url;
+            }
+            return '/_hy/ws';
+        }
+
         if (url) {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
