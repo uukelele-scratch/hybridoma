@@ -3,7 +3,7 @@ import { encode, decode } from "@msgpack/msgpack";
 class PortalBase extends EventTarget {
     constructor(options = {}) {
         super();
-        this.url = options.url || this._getDefaultURL();
+        this.url = this._getDefaultURL(options.url);
         this.ws = null;
         this.callId = 0;
         this.pendingCalls = new Map();
@@ -12,8 +12,21 @@ class PortalBase extends EventTarget {
         this.connect();
     }
 
-    _getDefaultURL() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws';
+    _getDefaultURL(url) {
+        if (url && /^(ws|wss|http|https):\/\//.test(url)) {
+            return url;
+        }
+
+        if (url) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+
+            const clean = url.startsWith('/') ? url : '/' + url;
+
+            return `${protocol}//${host}${clean}`;
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}/_hy/ws`;
     }
 

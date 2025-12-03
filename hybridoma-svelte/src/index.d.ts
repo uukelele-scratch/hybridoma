@@ -4,7 +4,7 @@ export interface PortalOptions {
     /**
      * The URL path to the backend WebSocket.
      * Defaults to `/_hy/ws` on the current host.
-     * Example: "http://localhost:8000/_hy/ws"
+     * Example: "ws://localhost:8000/_hy/ws"
      */
     url?: string;
 }

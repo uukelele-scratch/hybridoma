@@ -1,6 +1,6 @@
 {
   "name": "hybridoma-svelte",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The official Svelte client for the Hybridoma Python backend.",
   "keywords": [
     "svelte",
