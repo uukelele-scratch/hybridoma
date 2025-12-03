@@ -9,7 +9,9 @@ class PortalBase extends EventTarget {
         this.pendingCalls = new Map();
         this._emitter = new Map();
 
-        this.connect();
+        if (typeof window !== "undefined") {
+            this.connect();
+        }
     }
 
     _getDefaultURL(url) {
