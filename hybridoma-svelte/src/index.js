@@ -3,36 +3,34 @@ import { encode, decode } from "@msgpack/msgpack";
 class PortalBase extends EventTarget {
     constructor(options = {}) {
         super();
-        this.url = this._getDefaultURL(options.url);
+        this.options = options;
         this.ws = null;
         this.callId = 0;
         this.pendingCalls = new Map();
         this._emitter = new Map();
+        this._connectionPromise = null;
 
         if (typeof window !== "undefined") {
             this.connect();
         }
     }
 
-    _getDefaultURL(url) {
-        if (url && /^(ws|wss|http|https):\/\//.test(url)) {
-            return url;
-        }
+    _getUrl() {
+        let url = this.options.url;
 
-        if (typeof window === "undefined") {
-            if (url) {
-                return url.startsWith('/') ? url : '/' + url;
-            }
-            return '/_hy/ws';
-        }
+        if (url && /^(http|https):\/\//.test(url)) url = url.replace(/^http/, 'ws');
+        
+        if (url && /^(ws|wss|http|https):\/\//.test(url)) return url;
+
+        if (typeof window === "undefined") return '';
 
         if (url) {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
 
-            const clean = url.startsWith('/') ? url : '/' + url;
+            const path = url.startsWith('/') ? url : '/' + url;
 
-            return `${protocol}//${host}${clean}`;
+            return `${protocol}//${host}${path}`;
         }
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -40,8 +38,26 @@ class PortalBase extends EventTarget {
     }
 
     connect() {
-        this.ws = new WebSocket(this.url);
+        if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return;
+        
+        this.ws = new WebSocket(this._getUrl());
         this.ws.binaryType = "arrayBuffer";
+
+        this._connectionPromise = new Promise(resolve => {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                resolve();
+            } else {
+                const finish = () => {
+                    this.ws.removeEventListener('open', finish);
+                    this.ws.removeEventListener('close', finish);
+                    this.ws.removeEventListener('error', finish);
+                    resolve();
+                }
+                this.ws.addEventListener('open', finish);
+                this.ws.addEventListener('close', finish);
+                this.ws.addEventListener('error', finish);
+            }
+        });
 
         this.ws.onopen = () => {
             // console.log ?
@@ -67,9 +83,10 @@ class PortalBase extends EventTarget {
         }
 
         this.ws.onclose = () => {
+            this._connectionPromise = null;
             setTimeout(() => this.connect(), 3000);
         }
-    };
+    }
 
     on(name, cb) {
         if (!this._emitter.has(name)) this._emitter.set(name, new Set());
@@ -99,21 +116,34 @@ class PortalBase extends EventTarget {
 
 export function createPortal(options = {}) {
     const instance = new PortalBase(options);
-    const proxy = new Proxy(instance, {
+    return new Proxy(instance, {
         get(target, prop) {
             if (prop in target) return target[prop];
 
             return async(...args) => {
+                if (typeof window === "undefined") {
+                    console.warn(`[hy] RPC call '${String(prop)}' ignored during SSR. Call during browser-only code.`);
+                    return null;
+                }
+
+                if (!target.ws) target.connect();
+
+                if (target._connectionPromise) await target._connectionPromise;
+
+                if (target.ws.readyState != WebSocket.OPEN) {
+                    throw new Error("WebSocket not connected!")
+                }
+                
                 return new Promise((resolve, reject) => {
                     const id = ++target.callId;
                     target.pendingCalls.set(id, { resolve, reject });
-                    target.ws.send(encode({ type: 'rpc', id, name: prop, args }));
+                    try {
+                        target.ws.send(encode({ type: 'rpc', id, name: prop, args }));
+                    } catch (e) { target.pendingCalls.delete(id); reject(e); }
                 });
             };
         }
     });
-
-    return proxy;
 }
 
 // export const portal = createPortal();
